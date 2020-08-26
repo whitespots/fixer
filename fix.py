@@ -1,21 +1,21 @@
-# -*- coding: utf-8 -*- 
-# encoding=utf8  
+# -*- coding: utf-8 -*-
+# encoding=utf8
 #!/usr/bin/env python
 # Fixer: a FIX protocol fuzzer
-#     ______    _                       
+#     ______    _
 #    / ____/   (_)   _  __  ___    _____
 #   / /_      / /   | |/_/ / _ \  / ___/
-#  / __/     / /   _>  <  /  __/ / /    
-# /_/       /_/   /_/|_|  \___/ /_/                                           
-# 
-#                          
-# http://www.secforce.com  
+#  / __/     / /   _>  <  /  __/ / /
+# /_/       /_/   /_/|_|  \___/ /_/
+#
+#
+# http://www.secforce.com
 # Authors:
 # thanos.polychronis <at> secforce.com, lorenzo.vogelsang <at> secforce.com
 #################################################################################
 
 
-import sys 
+import sys
 import socket
 import argparse
 import re
@@ -31,7 +31,7 @@ __license__ = "GPL"
 __version__ = "0.1"
 
 
-reload(sys) 
+reload(sys)
 sys.setdefaultencoding('utf8')
 
 getSoh = ""
@@ -44,7 +44,7 @@ Usage= ('\n---------------------------------------------------------------------
           '  python fix.py --host=127.0.0.1 --port=11310 --input-file=fix.raw --csv=results.xls --auto-fuzz 1000 2 --param 55\n'
           '\n----------------------------------------------------------------------------------')
 
-                               
+
 parser = argparse.ArgumentParser(description='FIX values', usage=Usage)
 host = parser.add_argument('--host',  type=str, nargs='+', help='the IP of the FIX server', required=True)
 port = parser.add_argument('--port', type=int, help='the listening port', required=True)
@@ -68,7 +68,7 @@ if args.csv:
 def getFuzzList(file):
 	with open(file, 'r') as fuzz:
    	   	fuzzer = [line.rstrip() for line in fuzz]
-   	   	print fuzzer	
+   	   	print fuzzer
    	return fuzzer
 
 def timestampGen():
@@ -78,7 +78,7 @@ def timestampGen():
 
 def update_timestamp(message):
 	#52= extraction
-	timestamp_fix = dict(re.findall("(?:^|\x01)(52)=(.*?)\x01", message)) 
+	timestamp_fix = dict(re.findall("(?:^|\x01)(52)=(.*?)\x01", message))
 	#Extraction of the actual timestamp
 	timestamp = timestamp_fix['52']
 	#Whole timestamp tag+field
@@ -91,7 +91,7 @@ def update_timestamp(message):
 
 
 def checksum(message):
-	
+
 	# The checksum field is removed from FIX message
 	message = str(message[:-7])
 	# Checksum is computed
@@ -116,8 +116,8 @@ def update_bodylength(message, checksum):
 	soh = '\x01'
 	beginString = message.split(soh)[0]
 	message = message.strip(beginString)
-	message = str(message[:-8]) 
-	
+	message = str(message[:-8])
+
 	bodylength = dict(re.findall("(?:^|\x01)(9)=(.*?)\x01", message))
 	body_value = bodylength['9']
 
@@ -130,30 +130,34 @@ def update_bodylength(message, checksum):
 
 
 def sendFuzzMessage(host, port, logonmsg, final):
+    elapsed_time_ms = 0
+    fix_response = None
+    logonmsg,time_logon = update_timestamp(logonmsg)
+    logonmsg = update_checksum(logonmsg)
+    checksum_logonmsg = checksum(logonmsg)
+    s = socket.socket()
+    s.connect((host, port))
+    s.send(logonmsg)
 
-	logonmsg,time_logon = update_timestamp(logonmsg)
-	logonmsg = update_checksum(logonmsg)
-	checksum_logonmsg = checksum(logonmsg)
-	s = socket.socket()
-	s.connect((host, port))
-	s.send(logonmsg)
-
-	for f in final:
-		fix_request,time_fuzz = update_timestamp(f)
-		checksum_msg = checksum(f)
-		fix_request = update_bodylength(fix_request, checksum_msg)
-		fix_request = update_checksum(fix_request)
-		start_time = time.time()
-		s.send(fix_request)
-		print "\n[-] Sent: " + fix_request
-		fix_response = s.recv(1024)
-		print "[-] Received:" + fix_response
-		elapsed_time = (time.time() - start_time)
-		elapsed_time_ms = int(elapsed_time * 1000)
-		if args.csv:
-			csv(time_fuzz,fix_request,fix_response,elapsed_time_ms)
-	s.close
-	return  final, fix_response, elapsed_time_ms, s
+    for f in final:
+        fix_request,time_fuzz = update_timestamp(f)
+        checksum_msg = checksum(f)
+        fix_request = update_bodylength(fix_request, checksum_msg)
+        fix_request = update_checksum(fix_request)
+        start_time = time.time()
+        try:
+        	s.send(fix_request)
+        	print "\n[-] Sent: " + fix_request
+        	fix_response = s.recv(1024)
+        	print "[-] Received:" + fix_response
+        	elapsed_time = (time.time() - start_time)
+        	elapsed_time_ms = int(elapsed_time * 1000)
+        	if args.csv:
+        		csv(time_fuzz,fix_request,fix_response,elapsed_time_ms)
+        except Exception as ex:
+            print(ex)
+    s.close
+    return final, fix_response, elapsed_time_ms, s
 
 
 def update_fix_message(message):
@@ -170,17 +174,17 @@ def fix2log(message):
 def fuzz_it(logonmsg, fix_requests):
 	print("[+] %d Fix requests will now be fuzzed") % len(fix_requests)
 	testing = []
-	
+
 	d=dict()
 	testing=dict()
 
 	for request in fix_requests:
 		#request.split(getSoh)[0].split('=')
 		d.__setitem__(request, [request.split('=')[0] for request in request.split(getSoh)])
-	
-	for key, value in d.iteritems():	
+
+	for key, value in d.iteritems():
 		l = ",".join(value).split(",")
-					
+
 		if args.param:
 			args_param_str = ''.join(args.param).split(",")
 			for argument in args_param_str:
@@ -194,7 +198,7 @@ def fuzz_it(logonmsg, fix_requests):
 						testing[key].append(argument)
 					else:
 						testing.__setitem__(key,[argument])
-		else: 
+		else:
 			print "[+] No parameters were provided. Fuzzing everything\n"
 			testing.__setitem__(key,[x for x in l if x not in standard])
 	print ("\n[INFO] The requests and parameters to Fuzz! %s") %testing
@@ -203,7 +207,7 @@ def fuzz_it(logonmsg, fix_requests):
 
 
 def test(fix_requests, dict_final, logonmsg):
-	
+
 	for i in fix_requests:
 		if i in dict_final.keys():
 			params = ",".join(dict_final[i]).split(",")
@@ -296,12 +300,11 @@ def main():
 			fix_requests.append(message_ok)
 
 	if fix_requests:
-		
+
 		fuzz_it(logonmsg, fix_requests)
 	else:
 		print("[WARNING] No Messages to Fuzz were found")
 
-			
-if __name__ == "__main__":	
-	main()
 
+if __name__ == "__main__":
+	main()
